@@ -124,3 +124,56 @@ class SleepTime(BaseModel):
     optimal_bedtime: Optional[OptimalBedtime] = None
     recommendation: Optional[str] = None
     status: Optional[str] = None
+
+
+# ── F1.4: events & metadata ───────────────────────────────────────────────────
+
+class Workout(BaseModel):
+    id: str
+    day: str
+    start_datetime: Optional[str] = None
+    end_datetime: Optional[str] = None
+    activity: Optional[str] = None
+    calories: Optional[float] = None
+    distance: Optional[float] = None
+    intensity: Optional[str] = None
+    label: Optional[str] = None
+    source: Optional[str] = None
+
+
+class TimeSeriesSamples(BaseModel):
+    interval: Optional[float] = None
+    items: Optional[list[Optional[float]]] = None
+    timestamp: Optional[str] = None
+
+
+class Session(BaseModel):
+    id: str
+    day: str
+    start_datetime: Optional[str] = None
+    end_datetime: Optional[str] = None
+    type: Optional[str] = None
+    heart_rate: Optional[TimeSeriesSamples] = None
+    heart_rate_variance: Optional[TimeSeriesSamples] = None
+    mood: Optional[str] = None
+    perceived_exertion: Optional[float] = None
+
+
+class EnhancedTag(BaseModel):
+    id: str
+    tag_type_code: Optional[str] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    start_day: Optional[str] = None
+    end_day: Optional[str] = None
+    comment: Optional[str] = None
+    custom_name: Optional[str] = None
+
+
+class PersonalInfo(BaseModel):
+    id: str
+    age: Optional[int] = None
+    weight: Optional[float] = None
+    height: Optional[float] = None
+    biological_sex: Optional[str] = None
+    email: Optional[str] = None
