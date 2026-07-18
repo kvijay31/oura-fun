@@ -1,0 +1,82 @@
+@import "tailwindcss";
+
+/* === Design tokens === */
+:root {
+  --bg-base: #0B0D12;
+  --bg-surface: #13161E;
+  --bg-elevated: #1A1E28;
+  --bg-overlay: #222736;
+
+  --text-primary: #F0F2F7;
+  --text-secondary: #9BA3B8;
+  --text-muted: #5A6278;
+
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-muted: rgba(255, 255, 255, 0.10);
+
+  /* Readiness — teal/cyan */
+  --c-readiness: #00D2FF;
+  --c-readiness-from: #00D2FF;
+  --c-readiness-to: #006699;
+  --c-readiness-glow: rgba(0, 210, 255, 0.18);
+
+  /* Sleep — indigo/violet */
+  --c-sleep: #818CF8;
+  --c-sleep-from: #818CF8;
+  --c-sleep-to: #4338CA;
+  --c-sleep-glow: rgba(129, 140, 248, 0.18);
+
+  /* Activity — coral/orange */
+  --c-activity: #FB923C;
+  --c-activity-from: #FB923C;
+  --c-activity-to: #EA580C;
+  --c-activity-glow: rgba(249, 115, 22, 0.18);
+
+  --radius-card: 20px;
+  --font-system: ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+
+  color-scheme: dark;
+}
+
+/* Light mode — equally polished */
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg-base: #F4F6FB;
+    --bg-surface: #FFFFFF;
+    --bg-elevated: #F0F2F8;
+    --bg-overlay: #E8EBF4;
+    --text-primary: #0D1120;
+    --text-secondary: #4A5568;
+    --text-muted: #9BA3B8;
+    --border-subtle: rgba(0, 0, 0, 0.06);
+    --border-muted: rgba(0, 0, 0, 0.10);
+    color-scheme: light;
+  }
+}
+
+@theme inline {
+  --font-sans: var(--font-system);
+}
+
+html, body {
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-system);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-muted); border-radius: 9999px; }
+
+/* Ring animation keyframe */
+@keyframes ringFill {
+  from { stroke-dashoffset: var(--ring-full); }
+  to   { stroke-dashoffset: var(--ring-offset); }
+}
+
+@keyframes countUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
