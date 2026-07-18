@@ -15,3 +15,8 @@ build/
 htmlcov/
 .idea/
 .vscode/
+
+# Frontend
+frontend/node_modules/
+frontend/.next/
+frontend/out/
