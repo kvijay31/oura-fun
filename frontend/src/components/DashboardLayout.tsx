@@ -40,7 +40,7 @@ export default function DashboardLayout({ children, title }: DashboardLayoutProp
         )}
         {!error && !selected && (
           <div style={{ color: "var(--text-muted)", fontSize: 14 }}>
-            No people configured yet. Add <code>OURA_TOKEN_NAME=...</code> to your <code>.env</code>.
+            No data ingested yet — run the backfill script (F2.3) to populate the dashboard.
           </div>
         )}
         {selected && children(selected)}
