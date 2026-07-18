@@ -98,3 +98,7 @@ class OuraClient:
             current = chunk_end + timedelta(days=1)
 
         return results
+
+    def get_one(self, endpoint: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Fetch a single-record endpoint (e.g. personal_info) with no date range."""
+        return self._get(f"/{endpoint}", params or {})
