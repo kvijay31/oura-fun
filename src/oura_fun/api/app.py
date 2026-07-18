@@ -9,15 +9,18 @@ from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from . import db
+from .chat import router as chat_router
 
 app = FastAPI(title="oura-fun API", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000"],
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
+
+app.include_router(chat_router)
 
 _DEFAULT_DAYS = 30
 

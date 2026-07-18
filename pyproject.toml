@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Oura Ring data ingestion, DuckDB storage, and MCP server"
 requires-python = ">=3.12"
 dependencies = [
+    "anthropic>=0.43.0",
     "duckdb>=1.5.4",
     "fastapi>=0.115",
     "httpx>=0.28.1",
