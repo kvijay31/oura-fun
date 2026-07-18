@@ -106,6 +106,47 @@ dependency chain can run in parallel.
 
 ---
 
+## Phase 9 — Frontend: dashboard + chat *(local web app, runs alongside Phase 2/3)*
+
+Why this exists: Phase 3 (MCP server) only reaches people with Claude Desktop wired
+to this repo's DuckDB — i.e. just the operator. Household/friends (Phase 4/5) need
+a browser they can just open. This phase is the "how humans without Claude Desktop
+see this" layer that todo.md never scoped. Locally hosted for now, per the project's
+own ground rule — no public deployment.
+
+Design direction: sleek, restrained, Apple-style — generous whitespace, system font
+stack (SF Pro on macOS/iOS, graceful fallback elsewhere), subtle depth (soft shadows,
+light blur) instead of heavy borders, muted/neutral palette with one accent color,
+smooth but minimal motion (no bouncy/gimmicky transitions), full dark mode support
+that isn't an afterthought. Data density should feel calm, not clinical — think
+Apple Health / Apple Fitness, not a BI tool.
+
+### F9.1 Frontend scaffold + design system
+- Stack: FastAPI (reuses F0.1's Python env) serving a JSON API, Next.js/React + TypeScript + Tailwind for the frontend, run locally (`uv run` / `pnpm dev`, no deployment).
+- Design tokens: type scale (system font stack), spacing scale, light/dark color palettes (neutral + single accent), shadow/blur elevation scale, motion durations/easings.
+- Base component set built on the tokens: nav shell, card, stat tile, button, chart container, empty/loading/error states.
+- **Depends on:** F0.1. Does not need Phase 2/3 data to start — this is scaffold + design system only.
+
+### F9.2 Backend API layer
+- FastAPI endpoints reading the DuckDB views (`v_sleep_nightly`, `v_readiness_daily`, `v_activity_daily`), scoped by `person_id`.
+- Mirrors the MCP server's query shapes (F3.1) where reasonable, so dashboard and chat agree on what a "record" looks like.
+- **Depends on:** F2.2.
+
+### F9.3 Dashboard views
+- Per-person trend views: sleep (score + stages), readiness, activity — using F9.1's components, backed by F9.2.
+- Household/multi-person comparison view (lays groundwork for Phase 4/5, doesn't need to implement their analyses yet — just render what F9.2 exposes).
+- **Depends on:** F9.1, F9.2.
+
+### F9.4 Chat interface
+- Web chat UI (F9.1 components) wired to an LLM backend that calls the same MCP tools Claude Desktop uses (`query_sleep`, `query_readiness`, `query_activity`, `compare_people`, `baseline`, `run_sql`) — thin client over Phase 3's work, not a reimplementation.
+- **Depends on:** F9.1, F3.1, F3.2, F3.3.
+
+### F9.5 Multi-person access scoping
+- Resolves the open question "do friends see each other's raw data, or only standings" with an actual access-control decision in the API layer (F9.2), before Phase 5 onboards anyone outside the household.
+- **Depends on:** F9.2.
+
+---
+
 ## Phase 4 — Household sleep study *(optional, post-Phase 3)*
 
 ### F4.1 Shared timeline alignment
