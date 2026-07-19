@@ -13,17 +13,20 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from oura_fun.db import ENDPOINT_TABLES, connect, get_db_path, init_schema
+from oura_fun.db import ENDPOINT_TABLES, connect, get_db_path, init_db
+from oura_fun.views import VIEW_NAMES
 
 
 def main() -> None:
     db_path = Path(sys.argv[1]) if len(sys.argv) > 1 else get_db_path()
     print(f"Initializing schema at: {db_path}")
     with connect(db_path) as conn:
-        init_schema(conn)
-    print(f"Done. {len(ENDPOINT_TABLES)} tables ready:")
+        init_db(conn)
+    print(f"Done. {len(ENDPOINT_TABLES)} tables + {len(VIEW_NAMES)} views ready:")
     for table in ENDPOINT_TABLES:
-        print(f"  {table}")
+        print(f"  table: {table}")
+    for view in VIEW_NAMES:
+        print(f"  view:  {view}")
 
 
 if __name__ == "__main__":

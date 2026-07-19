@@ -56,3 +56,10 @@ def init_schema(conn: duckdb.DuckDBPyConnection) -> None:
     """Create all raw endpoint tables if they don't already exist."""
     for table in ENDPOINT_TABLES:
         conn.execute(_CREATE_TABLE_SQL.format(table=table))
+
+
+def init_db(conn: duckdb.DuckDBPyConnection) -> None:
+    """Create raw tables and derived views (idempotent)."""
+    from oura_fun.views import create_views
+    init_schema(conn)
+    create_views(conn)
