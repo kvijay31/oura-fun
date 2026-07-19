@@ -99,6 +99,15 @@ class OuraClient:
 
         return results
 
+    def fetch_heartrate(
+        self,
+        start_datetime: str,
+        end_datetime: str,
+    ) -> list[dict[str, Any]]:
+        """Fetch heartrate samples using ISO-8601 start_datetime/end_datetime params."""
+        params = {"start_datetime": start_datetime, "end_datetime": end_datetime}
+        return list(self._paginate("/heartrate", params))
+
     def get_one(self, endpoint: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         """Fetch a single-record endpoint (e.g. personal_info) with no date range."""
         return self._get(f"/{endpoint}", params or {})

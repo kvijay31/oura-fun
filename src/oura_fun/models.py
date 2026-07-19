@@ -177,3 +177,45 @@ class PersonalInfo(BaseModel):
     height: Optional[float] = None
     biological_sex: Optional[str] = None
     email: Optional[str] = None
+
+
+# ── F1.3: sleep (per-period detail) ──────────────────────────────────────────
+
+class TimeSeriesData(BaseModel):
+    interval: Optional[int] = None
+    items: Optional[list[Optional[float]]] = None
+    timestamp: Optional[str] = None
+
+
+class SleepPeriod(BaseModel):
+    id: str
+    day: str
+    type: Optional[str] = None
+    bedtime_start: Optional[str] = None
+    bedtime_end: Optional[str] = None
+    average_breath: Optional[float] = None
+    average_heart_rate: Optional[float] = None
+    average_hrv: Optional[int] = None
+    awake_time: Optional[int] = None
+    deep_sleep_duration: Optional[int] = None
+    efficiency: Optional[int] = None
+    heart_rate: Optional[TimeSeriesData] = None
+    hrv: Optional[TimeSeriesData] = None
+    latency: Optional[int] = None
+    light_sleep_duration: Optional[int] = None
+    lowest_heart_rate: Optional[int] = None
+    movement_30_sec: Optional[str] = None
+    period_id: Optional[int] = None
+    rem_sleep_duration: Optional[int] = None
+    restless_periods: Optional[int] = None
+    sleep_phase_5_min: Optional[str] = None
+    time_in_bed: Optional[int] = None
+    total_sleep_duration: Optional[int] = None
+
+
+# ── F1.3: heartrate (5-min granularity time series) ──────────────────────────
+
+class HeartRateSample(BaseModel):
+    bpm: int
+    source: Optional[str] = None
+    timestamp: str
