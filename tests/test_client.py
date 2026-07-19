@@ -155,6 +155,45 @@ def test_bearer_token_injected():
     client.close()
 
 
+# ── fetch_heartrate chunking ──────────────────────────────────────────────────
+
+@respx.mock
+def test_fetch_heartrate_chunks_into_30_day_windows():
+    calls: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        return httpx.Response(200, json={"data": [], "next_token": None})
+
+    respx.get(f"{BASE_URL}/heartrate").mock(side_effect=handler)
+    client = make_client()
+    # ~110-day range (like the failing smoke test) → should produce 4 chunks
+    client.fetch_heartrate("2026-04-01T00:00:00", "2026-07-19T23:59:59")
+    assert len(calls) == 4
+    # first chunk: 2026-04-01T00:00:00 → 2026-04-30T23:59:59 (30 days)
+    assert "start_datetime=2026-04-01T00%3A00%3A00" in str(calls[0].url)
+    assert "end_datetime=2026-04-30T23%3A59%3A59" in str(calls[0].url)
+    # second chunk starts 2026-05-01T00:00:00
+    assert "start_datetime=2026-05-01T00%3A00%3A00" in str(calls[1].url)
+    client.close()
+
+
+@respx.mock
+def test_fetch_heartrate_short_range_single_request():
+    calls: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        return httpx.Response(200, json={"data": [{"bpm": 60, "timestamp": "2026-04-01T08:00:00"}], "next_token": None})
+
+    respx.get(f"{BASE_URL}/heartrate").mock(side_effect=handler)
+    client = make_client()
+    result = client.fetch_heartrate("2026-04-01T00:00:00", "2026-04-10T23:59:59")
+    assert len(calls) == 1
+    assert len(result) == 1
+    client.close()
+
+
 # ── context manager ───────────────────────────────────────────────────────────
 
 @respx.mock

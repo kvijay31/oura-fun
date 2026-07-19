@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any, Iterator
 
 import httpx
@@ -104,9 +104,22 @@ class OuraClient:
         start_datetime: str,
         end_datetime: str,
     ) -> list[dict[str, Any]]:
-        """Fetch heartrate samples using ISO-8601 start_datetime/end_datetime params."""
-        params = {"start_datetime": start_datetime, "end_datetime": end_datetime}
-        return list(self._paginate("/heartrate", params))
+        """Fetch heartrate samples, chunked into ≤30-day windows to satisfy the API limit."""
+        start = datetime.fromisoformat(start_datetime)
+        end = datetime.fromisoformat(end_datetime)
+        chunk_size = timedelta(days=_MAX_DAYS)
+
+        results: list[dict[str, Any]] = []
+        current = start
+        while current <= end:
+            chunk_end = min(current + chunk_size - timedelta(seconds=1), end)
+            params = {
+                "start_datetime": current.strftime("%Y-%m-%dT%H:%M:%S"),
+                "end_datetime": chunk_end.strftime("%Y-%m-%dT%H:%M:%S"),
+            }
+            results.extend(self._paginate("/heartrate", params))
+            current = chunk_end + timedelta(seconds=1)
+        return results
 
     def get_one(self, endpoint: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         """Fetch a single-record endpoint (e.g. personal_info) with no date range."""
