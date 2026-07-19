@@ -9,6 +9,7 @@ const links = [
   { href: "/readiness", label: "Readiness" },
   { href: "/activity", label: "Activity" },
   { href: "/compare", label: "Compare" },
+  { href: "/chat", label: "Chat" },
 ];
 
 export default function NavShell({ children }: { children: React.ReactNode }) {
