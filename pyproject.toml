@@ -8,6 +8,7 @@ dependencies = [
     "duckdb>=1.5.4",
     "fastapi>=0.115",
     "httpx>=0.28.1",
+    "mcp>=1.0.0",
     "pydantic>=2.13.4",
     "pydantic-settings>=2.14.2",
     "uvicorn[standard]>=0.32",
@@ -19,6 +20,9 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/oura_fun"]
+
+[project.scripts]
+oura-mcp = "oura_fun.mcp_server:main"
 
 [dependency-groups]
 dev = [
