@@ -24,7 +24,7 @@ def conn():
 
 def test_all_tables_created(conn):
     existing = {row[0] for row in conn.execute("SHOW TABLES").fetchall()}
-    assert set(ENDPOINT_TABLES) == existing
+    assert set(ENDPOINT_TABLES) | {"people"} == existing
 
 
 def test_insert_and_select_row(conn):
@@ -116,4 +116,4 @@ def test_init_schema_is_idempotent(conn):
     """Calling init_schema a second time must not raise (IF NOT EXISTS)."""
     init_schema(conn)
     existing = {row[0] for row in conn.execute("SHOW TABLES").fetchall()}
-    assert set(ENDPOINT_TABLES) == existing
+    assert set(ENDPOINT_TABLES) | {"people"} == existing
