@@ -1,4 +1,4 @@
-"""Tests for the oura-fun MCP server: query tools and data-dictionary resource."""
+"""Tests for the oura-fun MCP server: query tools, run_sql, and data-dictionary resource."""
 
 from __future__ import annotations
 
@@ -8,7 +8,15 @@ from unittest.mock import patch
 import pytest
 
 import oura_fun.mcp_server as _mod
-from oura_fun.mcp_server import _DATA_DICTIONARY, data_dictionary, mcp, query_activity, query_readiness, query_sleep
+from oura_fun.mcp_server import (
+    _DATA_DICTIONARY,
+    data_dictionary,
+    mcp,
+    query_activity,
+    query_readiness,
+    query_sleep,
+    run_sql,
+)
 
 _SLEEP_ROW = {
     "day": "2025-01-15",
@@ -215,3 +223,70 @@ def test_data_dictionary_common_fields_present():
 
 def test_data_dictionary_dict_matches_function_output():
     assert json.loads(data_dictionary()) == _DATA_DICTIONARY
+
+
+# --- F3.3: run_sql ---
+
+_SQL_ROWS = [{"day": "2025-01-15", "score": 82}]
+
+
+def test_run_sql_select_returns_rows():
+    with patch("oura_fun.mcp_server._run_sql", return_value=_SQL_ROWS):
+        result = run_sql("SELECT * FROM v_sleep_nightly")
+    rows = json.loads(result)
+    assert rows[0]["score"] == 82
+
+
+def test_run_sql_with_cte_allowed():
+    with patch("oura_fun.mcp_server._run_sql", return_value=_SQL_ROWS):
+        result = run_sql("WITH cte AS (SELECT 1) SELECT * FROM cte")
+    rows = json.loads(result)
+    assert rows[0]["score"] == 82
+
+
+def test_run_sql_rejects_insert():
+    with patch("oura_fun.mcp_server._run_sql") as mock_fn:
+        result = run_sql("INSERT INTO v_sleep_nightly VALUES (1)")
+    mock_fn.assert_not_called()
+    assert "Error" in result
+    assert "SELECT" in result
+
+
+def test_run_sql_rejects_drop():
+    with patch("oura_fun.mcp_server._run_sql") as mock_fn:
+        result = run_sql("DROP TABLE v_sleep_nightly")
+    mock_fn.assert_not_called()
+    assert "Error" in result
+
+
+def test_run_sql_rejects_update():
+    with patch("oura_fun.mcp_server._run_sql") as mock_fn:
+        result = run_sql("UPDATE v_sleep_nightly SET score = 0")
+    mock_fn.assert_not_called()
+    assert "Error" in result
+
+
+def test_run_sql_case_insensitive():
+    with patch("oura_fun.mcp_server._run_sql", return_value=_SQL_ROWS):
+        result = run_sql("select * from v_sleep_nightly")
+    rows = json.loads(result)
+    assert rows[0]["score"] == 82
+
+
+def test_run_sql_leading_whitespace():
+    with patch("oura_fun.mcp_server._run_sql", return_value=_SQL_ROWS):
+        result = run_sql("  \n  SELECT * FROM v_sleep_nightly")
+    rows = json.loads(result)
+    assert rows[0]["score"] == 82
+
+
+def test_run_sql_empty_result():
+    with patch("oura_fun.mcp_server._run_sql", return_value=[]):
+        result = run_sql("SELECT * FROM v_sleep_nightly WHERE 1=0")
+    rows = json.loads(result)
+    assert rows == []
+
+
+def test_run_sql_tool_registered():
+    tool_names = {t.name for t in mcp._tool_manager.list_tools()}
+    assert "run_sql" in tool_names
