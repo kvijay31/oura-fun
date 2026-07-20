@@ -21,6 +21,7 @@ from oura_fun.api.db import (
     get_baseline,
     get_readiness,
     get_sleep,
+    run_sql as _run_sql,
 )
 
 mcp = FastMCP(
@@ -146,6 +147,23 @@ def baseline(person: str, metric: str, window: int) -> str:
             {"person": person, "metric": metric, "window_days": window, "mean": None, "stdev": None, "count": 0}
         )
     return _serialise(result)
+
+
+@mcp.tool(
+    description=(
+        "Read-only SQL escape hatch. "
+        "Executes a SELECT query (or a CTE starting with WITH) directly against "
+        "the DuckDB views (v_sleep_nightly, v_readiness_daily, v_activity_daily, etc.). "
+        "Non-SELECT statements (INSERT, UPDATE, DELETE, DROP, CREATE, …) are rejected. "
+        "Use this when the typed query tools don't cover your analysis."
+    )
+)
+def run_sql(query: str) -> str:
+    """Execute *query* read-only against the DuckDB views."""
+    first_token = query.strip().split()[0].upper() if query.strip() else ""
+    if first_token not in ("SELECT", "WITH"):
+        return "Error: only SELECT statements (and CTEs starting with WITH) are allowed."
+    return _serialise(_run_sql(query))
 
 
 def main() -> None:
