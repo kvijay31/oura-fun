@@ -7,13 +7,16 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 import httpx
-from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from . import db
 from . import access as ac
 from .chat import router as chat_router
+from .db import DBLockedError
+from . import refresh as _refresh
 
 log = logging.getLogger(__name__)
 
@@ -27,6 +30,18 @@ app.add_middleware(
 )
 
 app.include_router(chat_router)
+
+
+@app.exception_handler(DBLockedError)
+def _db_locked_handler(request: Request, exc: DBLockedError) -> JSONResponse:
+    return JSONResponse(
+        status_code=503,
+        content={
+            "error": "db_locked",
+            "message": "Database is locked — a data refresh is in progress. Retry in a few minutes.",
+            "refresh_running": _refresh.any_running(),
+        },
+    )
 
 _DEFAULT_DAYS = 30
 _PERSONAL_INFO_URL = "https://api.ouraring.com/v2/usercollection/personal_info"
@@ -185,3 +200,21 @@ def compare(
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.post("/api/refresh")
+def refresh_all() -> dict[str, Any]:
+    """Trigger incremental refresh for all configured people (non-blocking)."""
+    return {"status": _refresh.start_refresh()}
+
+
+@app.post("/api/refresh/{person_id}")
+def refresh_person(person_id: str) -> dict[str, Any]:
+    """Trigger incremental refresh for a specific person (non-blocking)."""
+    return {"status": _refresh.start_refresh(person_id)}
+
+
+@app.get("/api/refresh/status")
+def refresh_status() -> dict[str, Any]:
+    """Get current refresh state — running flag and last_refresh per person."""
+    return {"refresh": _refresh.get_status(), "any_running": _refresh.any_running()}
