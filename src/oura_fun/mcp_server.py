@@ -14,7 +14,15 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from oura_fun.api.db import get_activity, get_readiness, get_sleep, run_sql as _run_sql
+from oura_fun.api.db import (
+    METRIC_CATALOG,
+    compare_people_metric,
+    get_activity,
+    get_baseline,
+    get_readiness,
+    get_sleep,
+    run_sql as _run_sql,
+)
 
 mcp = FastMCP(
     name="oura-fun",
@@ -27,13 +35,13 @@ mcp = FastMCP(
 )
 
 
-def _serialise(rows: list[dict[str, Any]]) -> str:
-    """Convert rows to a JSON string, formatting dates as strings."""
+def _serialise(data: list[dict[str, Any]] | dict[str, Any]) -> str:
+    """Convert rows or a single record to a JSON string, formatting dates as strings."""
 
     def default(obj: Any) -> str:
         return str(obj)
 
-    return json.dumps(rows, default=default, indent=2)
+    return json.dumps(data, default=default, indent=2)
 
 
 @mcp.tool(
@@ -80,6 +88,65 @@ def query_activity(person: str, start: str, end: str) -> str:
     if not rows:
         return json.dumps({"person": person, "start": start, "end": end, "records": []})
     return _serialise(rows)
+
+
+_METRIC_NAMES = ", ".join(sorted(METRIC_CATALOG))
+
+
+@mcp.tool(
+    description=(
+        "Compare a metric across multiple people over a date range. "
+        f"Supported metrics: {_METRIC_NAMES}. "
+        "'people' is a comma-separated list of person IDs (e.g. 'kartik,partner'). "
+        "Returns a list of {person_id, day, value} records ordered by person then date."
+    )
+)
+def compare_people(metric: str, people: str, start: str, end: str) -> str:
+    """Return *metric* values for each person in the comma-separated *people* list."""
+    person_list = [p.strip() for p in people.split(",") if p.strip()]
+    if not person_list:
+        return json.dumps({"error": "No people specified."})
+    if metric not in METRIC_CATALOG:
+        return json.dumps(
+            {
+                "error": f"Unknown metric '{metric}'.",
+                "supported_metrics": sorted(METRIC_CATALOG),
+            }
+        )
+    rows = compare_people_metric(metric, person_list, start, end)
+    if not rows:
+        return json.dumps(
+            {"metric": metric, "people": person_list, "start": start, "end": end, "records": []}
+        )
+    return _serialise(rows)
+
+
+@mcp.tool(
+    description=(
+        "Compute mean and standard deviation for a metric over a trailing window "
+        "of days, for use in z-scoring. "
+        f"Supported metrics: {_METRIC_NAMES}. "
+        "'window' is the number of calendar days to look back (e.g. 90). "
+        "Returns {person, metric, window_days, start, end, mean, stdev, count}."
+    )
+)
+def baseline(person: str, metric: str, window: int) -> str:
+    """Return mean and stdev for *metric* over the last *window* days for *person*."""
+    if metric not in METRIC_CATALOG:
+        return json.dumps(
+            {
+                "error": f"Unknown metric '{metric}'.",
+                "supported_metrics": sorted(METRIC_CATALOG),
+            }
+        )
+    if window < 1:
+        return json.dumps({"error": "window must be a positive integer."})
+    result = get_baseline(person, metric, window)
+    if result is None:
+        return json.dumps(
+            {"person": person, "metric": metric, "window_days": window, "mean": None, "stdev": None, "count": 0}
+        )
+    return _serialise(result)
 
 
 @mcp.tool(
