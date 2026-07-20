@@ -10,6 +10,7 @@ const links = [
   { href: "/activity", label: "Activity" },
   { href: "/compare", label: "Compare" },
   { href: "/chat", label: "Chat" },
+  { href: "/settings", label: "Settings" },
 ];
 
 export default function NavShell({ children }: { children: React.ReactNode }) {

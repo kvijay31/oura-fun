@@ -52,14 +52,40 @@ def connect(db_path: Path | str | None = None) -> duckdb.DuckDBPyConnection:
     return duckdb.connect(str(path))
 
 
+_CREATE_PEOPLE_SQL = """\
+CREATE TABLE IF NOT EXISTS people (
+    person_id    TEXT      NOT NULL PRIMARY KEY,
+    token        TEXT      NOT NULL,
+    added_at     TIMESTAMP NOT NULL
+)"""
+
+
 def init_schema(conn: duckdb.DuckDBPyConnection) -> None:
-    """Create all raw endpoint tables if they don't already exist."""
+    """Create all raw endpoint tables and the people registry if they don't already exist."""
+    conn.execute(_CREATE_PEOPLE_SQL)
     for table in ENDPOINT_TABLES:
         conn.execute(_CREATE_TABLE_SQL.format(table=table))
 
 
 def init_db(conn: duckdb.DuckDBPyConnection) -> None:
-    """Create raw tables and derived views (idempotent)."""
+    """Create raw tables, people registry, and derived views (idempotent)."""
     from oura_fun.views import create_views
     init_schema(conn)
     create_views(conn)
+
+
+def upsert_person(conn: duckdb.DuckDBPyConnection, person_id: str, token: str) -> None:
+    """Insert or replace a person + token in the people registry."""
+    from datetime import datetime, timezone
+    added_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    conn.execute(
+        "INSERT INTO people (person_id, token, added_at) VALUES (?, ?, ?)"
+        " ON CONFLICT (person_id) DO UPDATE SET token = excluded.token, added_at = excluded.added_at",
+        [person_id, token, added_at],
+    )
+
+
+def list_people_from_db(conn: duckdb.DuckDBPyConnection) -> dict[str, str]:
+    """Return {person_id: token} for all entries in the people registry."""
+    rows = conn.execute("SELECT person_id, token FROM people ORDER BY added_at").fetchall()
+    return {r[0]: r[1] for r in rows}

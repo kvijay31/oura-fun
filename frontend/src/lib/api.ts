@@ -81,6 +81,27 @@ export async function fetchCompare(metric: string, start?: string, end?: string)
   return data.people;
 }
 
+export interface AddPersonResult {
+  person_id: string;
+  email: string | null;
+  age: number | null;
+  backfill: string;
+}
+
+export async function addPerson(person_id: string, token: string): Promise<AddPersonResult> {
+  const res = await fetch(`${BASE}/api/people`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ person_id, token }),
+    cache: "no-store",
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data?.detail ?? `API error ${res.status}`);
+  }
+  return data as AddPersonResult;
+}
+
 export function fmtMin(seconds: number | null): string {
   if (seconds == null) return "–";
   const m = Math.round(seconds / 60);
