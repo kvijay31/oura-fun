@@ -108,6 +108,15 @@ def get_readiness(person_id: str, start: str, end: str) -> list[dict[str, Any]]:
     )
 
 
+def run_sql(query: str) -> list[dict[str, Any]]:
+    """Execute *query* against the read-only DuckDB views.
+
+    Callers are responsible for validating that *query* is a SELECT/WITH statement.
+    The DuckDB connection is opened read_only=True as a second layer of enforcement.
+    """
+    return _query(query)
+
+
 def get_activity(person_id: str, start: str, end: str) -> list[dict[str, Any]]:
     return _query(
         """
