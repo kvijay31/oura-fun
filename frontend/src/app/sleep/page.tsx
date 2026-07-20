@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import RingScore from "@/components/RingScore";
 import Card from "@/components/Card";
 import StatTile from "@/components/StatTile";
 import TrendChart from "@/components/TrendChart";
 import { fetchSleep, fmtMin, type SleepRecord } from "@/lib/api";
+import { useRefresh } from "@/lib/refresh-context";
 
 const ACCENT = "#818CF8";
 const GLOW = "rgba(129,140,248,0.12)";
@@ -14,11 +15,17 @@ const GLOW = "rgba(129,140,248,0.12)";
 function SleepContent({ person }: { person: string }) {
   const [records, setRecords] = useState<SleepRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const { dataVersion } = useRefresh();
+  const initialLoad = useRef(true);
 
   useEffect(() => {
-    setLoading(true);
-    fetchSleep(person).then(r => { setRecords(r); setLoading(false); }).catch(() => setLoading(false));
-  }, [person]);
+    if (initialLoad.current) setLoading(true);
+    fetchSleep(person).then(r => {
+      setRecords(r);
+      setLoading(false);
+      initialLoad.current = false;
+    }).catch(() => setLoading(false));
+  }, [person, dataVersion]);
 
   const latest = records.at(-1);
   const scoreTrend = records.map(d => ({ day: d.day, value: d.score }));

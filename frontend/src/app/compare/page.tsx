@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import NavShell from "@/components/NavShell";
 import RingScore from "@/components/RingScore";
 import Card from "@/components/Card";
@@ -8,6 +8,7 @@ import MultiLineTrend from "@/components/MultiLineTrend";
 import { fetchPeople, fetchSleep, fetchReadiness, fetchActivity } from "@/lib/api";
 import type { SleepRecord, ReadinessRecord, ActivityRecord } from "@/lib/api";
 import type { Metric } from "@/lib/tokens";
+import { useRefresh } from "@/lib/refresh-context";
 
 const METRIC_CONFIG: Record<Metric, { color: string; glow: string; label: string }> = {
   readiness: { color: "#00D2FF", glow: "rgba(0,210,255,0.12)", label: "Readiness" },
@@ -29,6 +30,8 @@ function CompareContent() {
   const [data, setData] = useState<Record<string, MetricRecord[]>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { dataVersion } = useRefresh();
+  const initialLoad = useRef(true);
 
   useEffect(() => {
     fetchPeople()
@@ -38,16 +41,17 @@ function CompareContent() {
 
   useEffect(() => {
     if (people.length === 0) return;
-    setLoading(true);
+    if (initialLoad.current) setLoading(true);
     Promise.all(people.map(p => fetchForMetric(metric, p).then(records => ({ person: p, records }))))
       .then(results => {
         const map: Record<string, MetricRecord[]> = {};
         for (const { person, records } of results) map[person] = records;
         setData(map);
         setLoading(false);
+        initialLoad.current = false;
       })
       .catch(() => setLoading(false));
-  }, [people, metric]);
+  }, [people, metric, dataVersion]);
 
   const cfg = METRIC_CONFIG[metric];
 

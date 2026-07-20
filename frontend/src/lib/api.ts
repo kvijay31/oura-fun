@@ -6,6 +6,26 @@ async function get<T>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+// F10.1 contract: POST /api/refresh kicks off an async incremental sync.
+// status "started" | "running" → sync in progress (poll again)
+// status "throttled"           → skipped, last_refreshed has timestamps
+// status "done"                → sync just completed, last_refreshed has timestamps
+export interface RefreshStatus {
+  status: "started" | "running" | "throttled" | "done" | "error";
+  last_refreshed: Record<string, string | null>;
+  message?: string;
+}
+
+export async function triggerRefresh(person?: string): Promise<RefreshStatus> {
+  const url = person ? `/api/refresh/${person}` : "/api/refresh";
+  const res = await fetch(`${BASE}${url}`, { method: "POST", cache: "no-store" });
+  if (!res.ok) {
+    const body: { detail?: string } = await res.json().catch(() => ({}));
+    return { status: "error", last_refreshed: {}, message: body.detail ?? `HTTP ${res.status}` };
+  }
+  return res.json() as Promise<RefreshStatus>;
+}
+
 export interface SleepRecord {
   day: string;
   score: number | null;
