@@ -6,6 +6,7 @@ Returns empty lists gracefully when the DB file is absent or views don't exist.
 
 from __future__ import annotations
 
+import datetime
 import logging
 import os
 from contextlib import contextmanager
@@ -106,6 +107,120 @@ def get_readiness(person_id: str, start: str, end: str) -> list[dict[str, Any]]:
         """,
         [person_id, start, end],
     )
+
+
+# Metric catalog: metric_name → (view, column, optional WHERE clause beyond person/date)
+# Used by compare_people_metric and get_baseline.
+METRIC_CATALOG: dict[str, tuple[str, str, str | None]] = {
+    # Sleep scores and contributors (v_sleep_nightly)
+    "sleep_score": ("v_sleep_nightly", "score", None),
+    "sleep_deep": ("v_sleep_nightly", "c_deep_sleep", None),
+    "sleep_efficiency": ("v_sleep_nightly", "c_efficiency", None),
+    "sleep_latency": ("v_sleep_nightly", "c_latency", None),
+    "sleep_rem": ("v_sleep_nightly", "c_rem_sleep", None),
+    "sleep_restfulness": ("v_sleep_nightly", "c_restfulness", None),
+    "sleep_timing": ("v_sleep_nightly", "c_timing", None),
+    "sleep_total": ("v_sleep_nightly", "c_total_sleep", None),
+    # Sleep period detail — long_sleep period only (v_sleep_period)
+    "total_sleep_duration": ("v_sleep_period", "total_sleep_duration", "type = 'long_sleep'"),
+    "rem_sleep_duration": ("v_sleep_period", "rem_sleep_duration", "type = 'long_sleep'"),
+    "deep_sleep_duration": ("v_sleep_period", "deep_sleep_duration", "type = 'long_sleep'"),
+    "light_sleep_duration": ("v_sleep_period", "light_sleep_duration", "type = 'long_sleep'"),
+    "sleep_efficiency_pct": ("v_sleep_period", "efficiency", "type = 'long_sleep'"),
+    "restless_periods": ("v_sleep_period", "restless_periods", "type = 'long_sleep'"),
+    "average_hrv": ("v_sleep_period", "average_hrv", "type = 'long_sleep'"),
+    "average_heart_rate": ("v_sleep_period", "average_heart_rate", "type = 'long_sleep'"),
+    # Readiness (v_readiness_daily)
+    "readiness_score": ("v_readiness_daily", "score", None),
+    "temperature_deviation": ("v_readiness_daily", "temperature_deviation", None),
+    "hrv_balance": ("v_readiness_daily", "c_hrv_balance", None),
+    "recovery_index": ("v_readiness_daily", "c_recovery_index", None),
+    "resting_heart_rate_score": ("v_readiness_daily", "c_resting_heart_rate", None),
+    "sleep_balance": ("v_readiness_daily", "c_sleep_balance", None),
+    "activity_balance": ("v_readiness_daily", "c_activity_balance", None),
+    # Activity (v_activity_daily)
+    "activity_score": ("v_activity_daily", "score", None),
+    "steps": ("v_activity_daily", "steps", None),
+    "active_calories": ("v_activity_daily", "active_calories", None),
+    "total_calories": ("v_activity_daily", "total_calories", None),
+    "high_activity_time": ("v_activity_daily", "high_activity_time", None),
+    "medium_activity_time": ("v_activity_daily", "medium_activity_time", None),
+    "sedentary_time": ("v_activity_daily", "sedentary_time", None),
+}
+
+
+def compare_people_metric(
+    metric: str, people: list[str], start: str, end: str
+) -> list[dict[str, Any]]:
+    """Return daily metric values for multiple people over a date range.
+
+    Each row has ``person_id``, ``day``, ``value``.  Returns ``[]`` for unknown
+    metrics or when the DB is unavailable.
+    """
+    if metric not in METRIC_CATALOG:
+        return []
+    view, column, extra_filter = METRIC_CATALOG[metric]
+    placeholders = ", ".join("?" * len(people))
+    where = f"person_id IN ({placeholders}) AND day BETWEEN ? AND ?"
+    if extra_filter:
+        where += f" AND {extra_filter}"
+    sql = (
+        f"SELECT person_id, day, {column} AS value"
+        f" FROM {view}"
+        f" WHERE {where}"
+        f" ORDER BY person_id, day"
+    )
+    return _query(sql, [*people, start, end])
+
+
+def get_baseline(
+    person_id: str, metric: str, window_days: int
+) -> dict[str, Any] | None:
+    """Return mean and stdev for *metric* over the last *window_days* days.
+
+    Returns ``None`` for unknown metrics or when the DB is unavailable/empty.
+    The window end is today; start is ``today - window_days + 1`` days.
+    """
+    if metric not in METRIC_CATALOG:
+        return None
+    view, column, extra_filter = METRIC_CATALOG[metric]
+    today = datetime.date.today()
+    start = str(today - datetime.timedelta(days=window_days - 1))
+    end = str(today)
+    where = "person_id = ? AND day BETWEEN ? AND ?"
+    if extra_filter:
+        where += f" AND {extra_filter}"
+    sql = (
+        f"SELECT"
+        f" AVG({column}) AS mean,"
+        f" STDDEV_POP({column}) AS stdev,"
+        f" COUNT({column}) AS count"
+        f" FROM {view}"
+        f" WHERE {where}"
+    )
+    rows = _query(sql, [person_id, start, end])
+    if not rows or rows[0]["count"] == 0:
+        return None
+    row = rows[0]
+    return {
+        "person": person_id,
+        "metric": metric,
+        "window_days": window_days,
+        "start": start,
+        "end": end,
+        "mean": row["mean"],
+        "stdev": row["stdev"],
+        "count": int(row["count"]),
+    }
+
+
+def run_sql(query: str) -> list[dict[str, Any]]:
+    """Execute *query* against the read-only DuckDB views.
+
+    Callers are responsible for validating that *query* is a SELECT/WITH statement.
+    The DuckDB connection is opened read_only=True as a second layer of enforcement.
+    """
+    return _query(query)
 
 
 def get_activity(person_id: str, start: str, end: str) -> list[dict[str, Any]]:
