@@ -147,6 +147,33 @@ Apple Health / Apple Fitness, not a BI tool.
 
 ---
 
+## Phase 10 — Live refresh & person management
+
+Why this exists: the dashboard currently only shows data as of the last
+manual `backfill.py`/`incremental.py` run. For real day-to-day use, opening
+the app should surface data that's at most ~1 day stale without a human
+running a script, and adding a new person (partner, friend) should be a form
+in the UI, not manually editing `.env` and restarting the server.
+
+### F10.1 On-demand refresh endpoint
+- `POST /api/refresh` (optionally `/api/refresh/{person}`) runs the same logic as `scripts/incremental.py` (last 2 days, all configured people) in-process, returns `{person: last_refreshed_at}`.
+- Throttled server-side (e.g. skip re-running if last refresh was < 5 min ago) so page loads don't hammer the Oura API.
+- **Depends on:** F2.3, F2.4 (reuses `backfill_person`).
+
+### F10.2 Frontend refresh-on-load
+- Dashboard calls `POST /api/refresh` on mount (or on explicit user action — a refresh button), shows a subtle loading/last-updated indicator, then reloads the affected views once refresh completes.
+- **Depends on:** F10.1, F9.3.
+
+### F10.3 Durable person/token storage
+- New people added via the UI (not `.env`) need to work without restarting the server. Add a small local store (DuckDB table `people(person_id, token, added_at)` — gitignored DB, never committed) that `config.py`'s token discovery merges with `.env`-provided tokens.
+- **Depends on:** F0.1.
+
+### F10.4 "Add person" settings page
+- Form: name + Oura personal access token. Validates the token live against `personal_info` (reuse `check_auth.py`'s logic) before saving. On success, persists via F10.3 and triggers an initial backfill for that person.
+- **Depends on:** F10.3, F9.1.
+
+---
+
 ## Phase 4 — Household sleep study *(optional, post-Phase 3)*
 
 ### F4.1 Shared timeline alignment
