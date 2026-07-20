@@ -44,6 +44,17 @@ def main(argv: list[str] | None = None) -> None:
     result = run_checks(conn)
     conn.close()
 
+    total_event_gaps = sum(
+        len(dates)
+        for tables in result.event_date_gaps.values()
+        for dates in tables.values()
+    )
+    if total_event_gaps:
+        log.info(
+            "%d day(s) without data across event-based endpoints (workout, sleep, etc.) — normal, not a failure.",
+            total_event_gaps,
+        )
+
     if result.ok:
         log.info("All sanity checks passed.")
     else:
@@ -54,7 +65,7 @@ def main(argv: list[str] | None = None) -> None:
         )
         total_bad = sum(len(rows) for rows in result.bad_sleep_durations.values())
         log.error(
-            "Sanity checks FAILED: %d date gap(s), %d impossible sleep duration(s).",
+            "Sanity checks FAILED: %d date gap(s) in daily metrics, %d impossible sleep duration(s).",
             total_gaps,
             total_bad,
         )

@@ -1,7 +1,9 @@
 """F2.6: Sanity checks for ingested Oura data.
 
 Validates:
-- No gaps in date sequences across daily endpoints.
+- No gaps in date sequences across always-on daily endpoints (fails exit code).
+- Event-based endpoints (workout, sleep, session, etc.) checked informally — gaps
+  are expected and never cause exit 1.
 - No impossible sleep durations (> 86400 s or negative).
 - Logs row counts per raw table per run.
 """
@@ -17,18 +19,25 @@ import duckdb
 
 log = logging.getLogger(__name__)
 
-# Daily endpoints keyed by calendar date — we check for gaps in these.
-_DAILY_TABLES: list[str] = [
+# Always-on daily metrics — expected to have one row per calendar day.
+# Gaps here are real problems and cause exit 1.
+_CONTINUOUS_TABLES: list[str] = [
     "raw_daily_sleep",
     "raw_daily_readiness",
     "raw_daily_activity",
     "raw_daily_stress",
     "raw_daily_spo2",
-    "raw_sleep_time",
+    "raw_heartrate",
+]
+
+# Event-based endpoints — legitimately sparse (you don't work out every day).
+# Gaps are logged informationally but never cause exit 1.
+_EVENT_TABLES: list[str] = [
     "raw_sleep",
     "raw_workout",
     "raw_session",
     "raw_enhanced_tag",
+    "raw_sleep_time",
 ]
 
 # Max realistic total sleep duration in seconds (anything above is impossible).
@@ -38,8 +47,10 @@ _MAX_SLEEP_SECONDS = 86_400  # 24 h
 @dataclass
 class SanityResult:
     row_counts: dict[str, int] = field(default_factory=dict)
-    # {person_id: {table: [missing_dates]}}
+    # {person_id: {table: [missing_dates]}} — continuous endpoints only; affects ok
     date_gaps: dict[str, dict[str, list[date]]] = field(default_factory=dict)
+    # {person_id: {table: [missing_dates]}} — event endpoints; informational only
+    event_date_gaps: dict[str, dict[str, list[date]]] = field(default_factory=dict)
     # {person_id: [{natural_key, day, total_sleep_duration}]}
     bad_sleep_durations: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
 
@@ -137,7 +148,7 @@ def run_checks(conn: duckdb.DuckDBPyConnection) -> SanityResult:
 
     for person_id in persons:
         result.date_gaps[person_id] = {}
-        for table in _DAILY_TABLES:
+        for table in _CONTINUOUS_TABLES:
             gaps = check_date_gaps(conn, person_id, table)
             if gaps:
                 result.date_gaps[person_id][table] = gaps
@@ -148,6 +159,18 @@ def run_checks(conn: duckdb.DuckDBPyConnection) -> SanityResult:
                     len(gaps),
                     gaps[0],
                     gaps[-1],
+                )
+
+        result.event_date_gaps[person_id] = {}
+        for table in _EVENT_TABLES:
+            gaps = check_date_gaps(conn, person_id, table)
+            if gaps:
+                result.event_date_gaps[person_id][table] = gaps
+                log.info(
+                    "Sparse data for %s in %s: %d days without data (normal for event endpoints)",
+                    person_id,
+                    table,
+                    len(gaps),
                 )
 
         bad = check_sleep_durations(conn, person_id)

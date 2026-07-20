@@ -16,6 +16,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 from oura_fun.db import init_schema
 from oura_fun.sanity import (
     SanityResult,
+    _CONTINUOUS_TABLES,
+    _EVENT_TABLES,
     check_date_gaps,
     check_sleep_durations,
     row_counts,
@@ -42,6 +44,15 @@ def _insert_daily_sleep(conn, person_id: str, days: list[str]) -> None:
             "INSERT INTO raw_daily_sleep (person_id, natural_key, day, payload, fetched_at) "
             "VALUES (?, ?, ?, ?, ?)",
             [person_id, f"s_{d}", d, json.dumps({"id": f"s_{d}", "day": d, "score": 80}), FETCHED],
+        )
+
+
+def _insert_workout(conn, person_id: str, days: list[str]) -> None:
+    for d in days:
+        conn.execute(
+            "INSERT INTO raw_workout (person_id, natural_key, day, payload, fetched_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            [person_id, f"w_{d}", d, json.dumps({"id": f"w_{d}", "day": d, "activity": "running"}), FETCHED],
         )
 
 
@@ -248,3 +259,65 @@ def test_sanity_check_main_exits_1_on_bad_data(tmp_path):
     with pytest.raises(SystemExit) as exc_info:
         main(["--db-path", db])
     assert exc_info.value.code == 1
+
+
+# ── continuous vs event table split ──────────────────────────────────────────
+
+def test_continuous_tables_do_not_include_event_endpoints():
+    assert "raw_workout" not in _CONTINUOUS_TABLES
+    assert "raw_session" not in _CONTINUOUS_TABLES
+    assert "raw_enhanced_tag" not in _CONTINUOUS_TABLES
+    assert "raw_sleep_time" not in _CONTINUOUS_TABLES
+    assert "raw_sleep" not in _CONTINUOUS_TABLES
+
+
+def test_event_tables_do_not_include_daily_metrics():
+    assert "raw_daily_sleep" not in _EVENT_TABLES
+    assert "raw_daily_readiness" not in _EVENT_TABLES
+    assert "raw_daily_activity" not in _EVENT_TABLES
+    assert "raw_daily_stress" not in _EVENT_TABLES
+    assert "raw_daily_spo2" not in _EVENT_TABLES
+    assert "raw_heartrate" not in _EVENT_TABLES
+
+
+def test_event_endpoint_gaps_do_not_affect_ok(conn):
+    """Gaps in event-based tables (workout, etc.) must not make result.ok False."""
+    _insert_daily_sleep(conn, "kartik", ["2024-01-01", "2024-01-02", "2024-01-03"])
+    # workout only on day 1 and 3 — day 2 absent (sparse is normal)
+    _insert_workout(conn, "kartik", ["2024-01-01", "2024-01-03"])
+    result = run_checks(conn)
+    assert result.ok
+
+
+def test_event_gaps_recorded_in_event_date_gaps(conn):
+    """Gaps in event endpoints land in event_date_gaps, not date_gaps."""
+    _insert_daily_sleep(conn, "kartik", ["2024-01-01", "2024-01-02", "2024-01-03"])
+    _insert_workout(conn, "kartik", ["2024-01-01", "2024-01-03"])
+    result = run_checks(conn)
+    assert "raw_workout" in result.event_date_gaps.get("kartik", {})
+    assert "raw_workout" not in result.date_gaps.get("kartik", {})
+
+
+def test_continuous_gaps_still_fail(conn):
+    """Gaps in daily_sleep (continuous) still make result.ok False."""
+    _insert_daily_sleep(conn, "kartik", ["2024-01-01", "2024-01-03"])  # gap Jan 2
+    result = run_checks(conn)
+    assert not result.ok
+    assert "raw_daily_sleep" in result.date_gaps.get("kartik", {})
+
+
+def test_sanity_check_exits_0_when_only_event_gaps(tmp_path):
+    """Script exits 0 even when event endpoints have gaps."""
+    from oura_fun.db import init_schema as _init, connect as _connect
+    from oura_fun.views import create_views as _views
+
+    db = str(tmp_path / "test.duckdb")
+    c = _connect(db)
+    _init(c)
+    _views(c)
+    _insert_daily_sleep(c, "kartik", ["2024-01-01", "2024-01-02", "2024-01-03"])
+    _insert_workout(c, "kartik", ["2024-01-01", "2024-01-03"])  # gap on Jan 2 — OK
+    c.close()
+
+    from sanity_check import main
+    main(["--db-path", db])  # must not raise SystemExit
