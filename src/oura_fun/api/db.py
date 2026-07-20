@@ -2,6 +2,8 @@
 
 Reads from v_sleep_nightly, v_readiness_daily, v_activity_daily (F2.2 views).
 Returns empty lists gracefully when the DB file is absent or views don't exist.
+Raises DBLockedError instead of returning empty results when the file is locked
+by a concurrent write connection (i.e. a refresh is in progress).
 """
 
 from __future__ import annotations
@@ -15,6 +17,12 @@ from typing import Any
 _DB_PATH = os.environ.get("OURA_DB_PATH", "oura.duckdb")
 _log = logging.getLogger(__name__)
 
+_LOCK_KEYWORDS = ("lock", "busy", "conflict", "unavailable", "held by")
+
+
+class DBLockedError(Exception):
+    """Database file is locked by a concurrent write connection."""
+
 
 @contextmanager
 def _conn():
@@ -26,7 +34,11 @@ def _conn():
             yield con
         finally:
             con.close()
-    except Exception:
+    except Exception as exc:
+        msg = str(exc).lower()
+        if any(kw in msg for kw in _LOCK_KEYWORDS):
+            raise DBLockedError(str(exc)) from exc
+        _log.debug("DB unavailable: %s", exc)
         yield None
 
 
