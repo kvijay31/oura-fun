@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import RefreshBadge from "./RefreshBadge";
 
 const links = [
   { href: "/", label: "Overview" },
@@ -31,7 +32,7 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
           <span style={{ fontWeight: 700, fontSize: 16, letterSpacing: "-0.02em", color: "var(--text-primary)" }}>
             Oura
           </span>
-          <nav style={{ display: "flex", gap: 4 }}>
+          <nav style={{ display: "flex", gap: 4, flex: 1 }}>
             {links.map(({ href, label }) => {
               const active = pathname === href;
               return (
@@ -54,6 +55,7 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
               );
             })}
           </nav>
+          <RefreshBadge />
         </div>
       </header>
       <main style={{ flex: 1, maxWidth: 1200, margin: "0 auto", width: "100%", padding: "32px 24px" }}>
