@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, useRef, useCallback } from "react";
-import { triggerRefresh, type RefreshStatus } from "./api";
+import { triggerRefresh, fetchRefreshStatus } from "./api";
 
 export type RefreshState = "idle" | "refreshing" | "done" | "unavailable";
 
@@ -40,24 +40,44 @@ export function RefreshProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const finishRefresh = useCallback((result: RefreshStatus) => {
-    if (!mountedRef.current) return;
+  const stopPolling = useCallback(() => {
     if (pollRef.current) {
       clearInterval(pollRef.current);
       pollRef.current = null;
     }
-    setLastRefreshed(result.last_refreshed ?? {});
-    setRefreshState("done");
-    setDataVersion(v => v + 1);
   }, []);
+
+  // Poll GET /api/refresh/status once. Returns true once any_running is false,
+  // having already surfaced the results and stopped the interval.
+  const pollUntilDone = useCallback(async (): Promise<boolean> => {
+    let status;
+    try {
+      status = await fetchRefreshStatus();
+    } catch {
+      // transient error — keep polling on the next tick
+      return false;
+    }
+    if (!mountedRef.current) return true;
+    if (!status.any_running) {
+      stopPolling();
+      const lastRefresh: Record<string, string | null> = {};
+      for (const [pid, s] of Object.entries(status.refresh)) {
+        lastRefresh[pid] = s.last_refresh;
+      }
+      setLastRefreshed(lastRefresh);
+      setRefreshState("done");
+      setDataVersion(v => v + 1);
+      return true;
+    }
+    return false;
+  }, [stopPolling]);
 
   const trigger = useCallback(async () => {
     if (refreshState === "refreshing") return;
     setRefreshState("refreshing");
 
-    let result: RefreshStatus;
     try {
-      result = await triggerRefresh();
+      await triggerRefresh();
     } catch {
       if (mountedRef.current) setRefreshState("unavailable");
       return;
@@ -65,26 +85,21 @@ export function RefreshProvider({ children }: { children: React.ReactNode }) {
 
     if (!mountedRef.current) return;
 
-    if (result.status === "started" || result.status === "running") {
-      // Async refresh — poll until completion
-      pollRef.current = setInterval(async () => {
-        try {
-          const poll = await triggerRefresh();
-          if (poll.status !== "started" && poll.status !== "running") {
-            finishRefresh(poll);
-          }
-        } catch {
-          // keep polling
-        }
-      }, POLL_MS);
-    } else {
-      finishRefresh(result);
+    // Kickoff returns immediately with per-person "started"/"throttled"/etc — the
+    // actual completion is tracked by GET /api/refresh/status, so poll that
+    // until it reports nothing running.
+    const done = await pollUntilDone();
+    if (!done) {
+      stopPolling();
+      pollRef.current = setInterval(pollUntilDone, POLL_MS);
     }
-  }, [refreshState, finishRefresh]);
+  }, [refreshState, pollUntilDone, stopPolling]);
 
-  // Trigger once on mount
+  // Trigger once on mount. Deferred a tick so the initial setState inside
+  // trigger() doesn't happen synchronously within the effect body.
   useEffect(() => {
-    trigger();
+    const id = setTimeout(trigger, 0);
+    return () => clearTimeout(id);
     // intentionally omit trigger from deps to run only on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
