@@ -6,6 +6,36 @@ async function get<T>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+// F10.1 contract:
+// POST /api/refresh[/{person}] kicks off a background incremental sync per person.
+// Returns {status: {person_id: "started" | "already_running" | "throttled (retry in Ns)" | "no_token"}}.
+// GET /api/refresh/status reports live state: {refresh: {person_id: {running, last_refresh, error}}, any_running}.
+export interface RefreshKickoff {
+  status: Record<string, string>;
+}
+
+export interface PersonRefreshState {
+  running: boolean;
+  last_refresh: string | null;
+  error: string | null;
+}
+
+export interface RefreshStatusResponse {
+  refresh: Record<string, PersonRefreshState>;
+  any_running: boolean;
+}
+
+export async function triggerRefresh(person?: string): Promise<RefreshKickoff> {
+  const url = person ? `/api/refresh/${person}` : "/api/refresh";
+  const res = await fetch(`${BASE}${url}`, { method: "POST", cache: "no-store" });
+  if (!res.ok) throw new Error(`API ${url} → ${res.status}`);
+  return res.json() as Promise<RefreshKickoff>;
+}
+
+export async function fetchRefreshStatus(): Promise<RefreshStatusResponse> {
+  return get<RefreshStatusResponse>("/api/refresh/status");
+}
+
 export interface SleepRecord {
   day: string;
   score: number | null;

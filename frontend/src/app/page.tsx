@@ -1,20 +1,24 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import RingScore from "@/components/RingScore";
 import Card from "@/components/Card";
 import TrendChart from "@/components/TrendChart";
 import { fetchSleep, fetchReadiness, fetchActivity, type SleepRecord, type ReadinessRecord, type ActivityRecord } from "@/lib/api";
+import { useRefresh } from "@/lib/refresh-context";
 
 function OverviewContent({ person }: { person: string }) {
   const [sleep, setSleep] = useState<SleepRecord[]>([]);
   const [readiness, setReadiness] = useState<ReadinessRecord[]>([]);
   const [activity, setActivity] = useState<ActivityRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const { dataVersion } = useRefresh();
+  const initialLoad = useRef(true);
 
   useEffect(() => {
-    setLoading(true);
+    // Only show loading spinner on initial load — silent reload on refresh
+    if (initialLoad.current) setLoading(true);
     Promise.all([
       fetchSleep(person),
       fetchReadiness(person),
@@ -24,8 +28,9 @@ function OverviewContent({ person }: { person: string }) {
       setReadiness(r);
       setActivity(a);
       setLoading(false);
+      initialLoad.current = false;
     }).catch(() => setLoading(false));
-  }, [person]);
+  }, [person, dataVersion]);
 
   const latestSleep = sleep.at(-1);
   const latestReadiness = readiness.at(-1);
